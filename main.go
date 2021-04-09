@@ -49,8 +49,21 @@ func main() {
 
 	numbers, err := getAllNumbers(db)
 	must(err)
-	for _, phNum := range numbers {
-		fmt.Printf("%+v \n", phNum)
+	for _, p := range numbers {
+		number := normalize(p.value)
+		if number != p.value {
+			fmt.Println("Updating or removing...", number)
+			existing, err := findPhone(db, number)
+			must(err)
+			if existing != nil {
+				must(deletePhone(db, p.id))
+			} else {
+				p.value = number
+				must(updatePhone(db, p))
+			}
+		} else {
+			fmt.Println("No changes required")
+		}
 	}
 
 }
@@ -67,6 +80,31 @@ func insertPhoneNumber(db *sql.DB, phone string) (int, error) {
 type phone struct {
 	id    int
 	value string
+}
+
+func findPhone(db *sql.DB, number string) (*phone, error) {
+	var p phone
+	row := db.QueryRow("SELECT * FROM phone_numbers WHERE value=$1", number)
+	err := row.Scan(&p.id, &p.value)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+func updatePhone(db *sql.DB, p phone) error {
+	statement := `UPDATE phone_numbers SET value=$2 WHERE id=$1`
+	_, err := db.Exec(statement, p.id, p.value)
+	return err
+}
+
+func deletePhone(db *sql.DB, id int) error {
+	statement := `DELETE FROM phone_numbers WHERE id=$1`
+	_, err := db.Exec(statement, id)
+	return err
 }
 
 func getAllNumbers(db *sql.DB) ([]phone, error) {
